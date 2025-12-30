@@ -23,6 +23,38 @@ class UserAdmin(BaseUserAdmin):
             },
         ),
         ("Important dates", {"fields": ("last_login", "date_joined")}),
+        (
+            "Vendor Info",
+            {
+                "fields": (
+                    "business_name",
+                    "business_type",
+                    "operating_areas",
+                    "scrape_types",
+                )
+            },
+        ),
+        (
+            "Vendor Documents",
+            {
+                "fields": (
+                    "business_license",
+                    "gst_certificate",
+                    "address_proof",
+                    "id_proof",
+                )
+            },
+        ),
+        (
+            "Vendor Verification",
+            {
+                "fields": (
+                    "is_verified",
+                    "is_phone_verified",
+                    "is_email_verified",
+                )
+            },
+        ),
     )
 
     add_fieldsets = (

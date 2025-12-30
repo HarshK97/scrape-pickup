@@ -44,6 +44,13 @@ class SellerRegistrationSerializer(serializers.ModelSerializer):
             "address",
             "city",
             "scrape_types",
+            "business_name",
+            "business_type",
+            "operating_areas",
+            "business_license",
+            "gst_certificate",
+            "address_proof",
+            "id_proof",
         ]
 
     def create(self, validated_data):
