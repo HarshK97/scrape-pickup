@@ -6,7 +6,7 @@ class OTPService:
     def __init__(self):
         self.account_sid = os.getenv("TWILIO_ACCOUNT_SID")
         self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-        self.service_sid = os.getenv("TWILIO_SERVICE_SID")
+
         self.phone_number = os.getenv("TWILIO_PHONE_NUMBER")
         
         self.client = None
@@ -47,7 +47,6 @@ class OTPService:
 
     def verify_otp(self, input_otp, expected_otp):
         """
-        Simple verification logic. 
-        Could be expanded to use Twilio Verify API later.
+        Simple verification logic.
         """
         return input_otp == expected_otp

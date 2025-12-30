@@ -22,7 +22,15 @@ class ClientRegistrationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["email", "password", "full_name", "phone_number", "address", "city"]
+        fields = [
+            "email",
+            "password",
+            "full_name",
+            "phone_number",
+            "address",
+            "city",
+            "id_proof",
+        ]
 
     def create(self, validated_data):
         validated_data["is_client"] = True
@@ -32,7 +40,7 @@ class ClientRegistrationSerializer(serializers.ModelSerializer):
 class SellerRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
     scrape_types = serializers.ListField(
-        child=serializers.CharField(max_length=50), allow_empty=False
+        child=serializers.CharField(max_length=50), allow_empty=True, required=False
     )
 
     class Meta:

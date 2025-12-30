@@ -40,6 +40,7 @@ def get_auth_response(user, message):
 
 class ClientRegistrationView(GenericAPIView):
     permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
     serializer_class = ClientRegistrationSerializer
 
     def post(self, request):
@@ -56,11 +57,9 @@ class SellerRegistrationView(GenericAPIView):
     serializer_class = SellerRegistrationSerializer
 
     def post(self, request):
-        # Handle QueryDict list issue for multipart/form-data
         data = request.data
         if hasattr(data, "getlist"):
             data = data.copy()  # Make mutable
-            # "scrape_types" is sent as multiple keys in FormData
             scrape_types = data.getlist("scrape_types")
             if scrape_types:
                 data["scrape_types"] = scrape_types
@@ -153,7 +152,6 @@ class VerifyPickupOTPView(GenericAPIView):
 
             try:
                 pickup_req = PickupRequest.objects.get(id=req_id)
-                # Verify Logic
                 if pickup_req.otp_code == otp:
                     pickup_req.is_phone_verified = True
                     pickup_req.status = "confirmed"
