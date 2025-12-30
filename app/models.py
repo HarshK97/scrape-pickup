@@ -8,14 +8,15 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=150, blank=True)
 
-    # Common Fields
+    # common fields
     phone_number = models.CharField(max_length=15, blank=True)
     address = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
 
-    # Role Flags
+    # role flags
     is_client = models.BooleanField(default=False)
     is_seller = models.BooleanField(default=False)
+
 
     # Vendor Specific Fields
     business_name = models.CharField(max_length=255, blank=True)
@@ -33,6 +34,8 @@ class User(AbstractUser):
     is_phone_verified = models.BooleanField(default=False)
     is_email_verified = models.BooleanField(default=False)
 
+
+
     # storing list like ["PAPER", "GLASS"]
     scrape_types = models.JSONField(default=list, blank=True)
 
@@ -43,3 +46,35 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+class PickupRequest(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("confirmed", "Confirmed"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="pickup_requests"
+    )
+    address = models.TextField()
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    date = models.DateField()
+    time_slot = models.CharField(max_length=50)
+    scrape_image = models.ImageField(upload_to="pickup_images/", blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+
+    # contact & verification
+    contact_name = models.CharField(max_length=150, blank=True)
+    contact_phone = models.CharField(max_length=15, blank=True)
+    is_phone_verified = models.BooleanField(default=False)
+    otp_code = models.CharField(max_length=6, blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Pickup {self.id} - {self.status}"

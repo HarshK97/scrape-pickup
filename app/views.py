@@ -7,6 +7,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import ClientRegistrationSerializer, SellerRegistrationSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import CustomTokenObtainPairSerializer
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import MultiPartParser, FormParser
+from .serializers import PickupRequestSerializer, OTPVerificationSerializer
+from .models import PickupRequest
+import random
+from .services.otp_service import OTPService
+from django.core.cache import cache
 
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -24,10 +31,8 @@ def get_auth_response(user, message):
                 "is_client": user.is_client,
                 "is_seller": user.is_seller,
             },
-            "tokens": {
-                "refresh": str(refresh),
-                "access": str(refresh.access_token),
-            },
+            "refresh": str(refresh),
+            "access": str(refresh.access_token),
         },
         status=status.HTTP_201_CREATED,
     )
@@ -67,41 +72,49 @@ class SellerRegistrationView(GenericAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-from .services.otp_service import OTPService
-from django.core.cache import cache
-
 class SendOTPView(GenericAPIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
         contact = request.data.get("contact")
-        channel = request.data.get("channel", "email") # or 'sms' (phone)
+        channel = request.data.get("channel", "email")
 
         if not contact:
-            return Response({"error": "Contact is required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Contact is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         otp_service = OTPService()
-        # For this implementation, we treat 'email' and 'sms' similarly or rely on the service
-        # The provided service has send_otp(phone_number).
-        # We might need to adapt it for email if the service supports it, or just use it for phone.
-        # However, the user wants "Backend OTP" for both logic.
-        # The stash showed `send_otp` taking `phone_number`.
-        
-        # NOTE: The current OTPService seems to only support phone/Twilio. 
-        # For simplicity in this step, I will use the SAME service method but mock/log for email if needed, 
-        # or assuming the user wants to use the SAME generation logic.
-        
-        otp = otp_service.send_otp(contact) 
-        
-        # Store in cache: key=otp_CONTACT, val=OTP, timeout=300s
+        otp = otp_service.send_otp(contact, channel=channel)
+
         cache_key = f"otp_{contact}"
         cache.set(cache_key, otp, timeout=300)
 
-        # In a real app, don't return OTP. For dev/demo, we return it to help testing.
-        return Response({
-            "message": "OTP sent successfully", 
-            "mock_otp": otp # REMOVE IN PRODUCTION
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "OTP sent successfully", "mock_otp": otp},
+            status=status.HTTP_200_OK,
+        )
+
+
+class CreatePickupView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PickupRequestSerializer
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            pickup_request = serializer.save(user=request.user)
+
+            return Response(
+                {
+                    "message": "Pickup request initiated.",
+                    "request_id": pickup_request.id,
+                    "status": pickup_request.status,
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class VerifyOTPView(GenericAPIView):
@@ -112,14 +125,93 @@ class VerifyOTPView(GenericAPIView):
         otp = request.data.get("otp")
 
         if not contact or not otp:
-            return Response({"error": "Contact and OTP are required"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"error": "Contact and OTP are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         cache_key = f"otp_{contact}"
         cached_otp = cache.get(cache_key)
 
         if cached_otp and str(cached_otp) == str(otp):
-            # Optional: Clear OTP after success
-            # cache.delete(cache_key)
             return Response({"message": "OTP Verified"}, status=status.HTTP_200_OK)
-        
-        return Response({"error": "Invalid or expired OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {"error": "Invalid or expired OTP"}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+
+class VerifyPickupOTPView(GenericAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = OTPVerificationSerializer
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            req_id = serializer.validated_data["request_id"]
+            otp = serializer.validated_data["otp"]
+
+            try:
+                pickup_req = PickupRequest.objects.get(id=req_id)
+                # Verify Logic
+                if pickup_req.otp_code == otp:
+                    pickup_req.is_phone_verified = True
+                    pickup_req.status = "confirmed"
+                    pickup_req.save()
+                    return Response(
+                        {"message": "Phone verified. Pickup confirmed."},
+                        status=status.HTTP_200_OK,
+                    )
+                else:
+                    return Response(
+                        {"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST
+                    )
+
+            except PickupRequest.DoesNotExist:
+                return Response(
+                    {"error": "Request not found"}, status=status.HTTP_404_NOT_FOUND
+                )
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ContactInfoView(GenericAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PickupRequestSerializer
+
+    def post(self, request):
+        req_id = request.data.get("request_id")
+        if not req_id:
+            return Response(
+                {"error": "request_id required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            pickup = PickupRequest.objects.get(id=req_id, user=request.user)
+            contact_name = request.data.get("contact_name")
+            contact_phone = request.data.get("contact_phone")
+
+            pickup.contact_name = contact_name
+            pickup.contact_phone = contact_phone
+
+            otp_service = OTPService()
+            mock_otp = otp_service.send_otp(contact_phone, channel="sms")
+
+            pickup.otp_code = mock_otp
+            pickup.save()
+
+            print(f"------------> OTP for Request {req_id}: {mock_otp}")
+
+            return Response(
+                {
+                    "message": "Contact info updated. OTP sent.",
+                    "request_id": pickup.id,
+                    "mock_otp": mock_otp,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        except PickupRequest.DoesNotExist:
+            return Response(
+                {"error": "Pickup request not found"}, status=status.HTTP_404_NOT_FOUND
+            )

@@ -90,13 +90,40 @@ def run_verification():
         print(f"  FAILED: {resp.status_code} - {resp.text}")
         return
 
-    # 5. Verify OTP
-    print(f"\n[5] Verifying OTP: {otp}...")
+    # 5. Verify Email OTP
+    print(f"\n[5] Verifying Email OTP: {otp}...")
     verify_data = {"contact": email, "otp": otp}
     resp = requests.post(f"{BASE_URL}/otp/verify/", json=verify_data)
 
     if resp.status_code == 200:
-        print("  SUCCESS: OTP Verified.")
+        print("  SUCCESS: Email OTP Verified.")
+    else:
+        print(f"  FAILED: {resp.status_code} - {resp.text}")
+        return
+
+    # 6. Test OTP Send (SMS)
+    phone = "9876543210"
+    channel = "sms"
+    print(f"\n[6] Testing OTP Send ({channel})...")
+    otp_payload = {"contact": phone, "channel": channel}
+    resp = requests.post(f"{BASE_URL}/otp/send/", json=otp_payload)
+    
+    sms_otp = None
+    if resp.status_code == 200:
+        data = resp.json()
+        sms_otp = data.get("mock_otp")
+        print(f"  SUCCESS: SMS OTP Sent. Mock OTP: {sms_otp}")
+    else:
+        print(f"  FAILED: {resp.status_code} - {resp.text}")
+        return
+
+    # 7. Verify SMS OTP
+    print(f"\n[7] Verifying SMS OTP: {sms_otp}...")
+    verify_data = {"contact": phone, "otp": sms_otp}
+    resp = requests.post(f"{BASE_URL}/otp/verify/", json=verify_data)
+
+    if resp.status_code == 200:
+        print("  SUCCESS: SMS OTP Verified.")
     else:
         print(f"  FAILED: {resp.status_code} - {resp.text}")
         return

@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import User
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from .models import PickupRequest
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -56,3 +57,30 @@ class SellerRegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data["is_seller"] = True
         return User.objects.create_user(**validated_data)
+
+
+class PickupRequestSerializer(serializers.ModelSerializer):
+    contact_name = serializers.CharField(required=False, allow_blank=True)
+    contact_phone = serializers.CharField(required=False, allow_blank=True)
+
+    class Meta:
+        model = PickupRequest
+        fields = [
+            "id",
+            "address",
+            "latitude",
+            "longitude",
+            "date",
+            "time_slot",
+            "scrape_image",
+            "status",
+            "contact_name",
+            "contact_phone",
+            "is_phone_verified",
+        ]
+        read_only_fields = ["id", "status", "is_phone_verified"]
+
+
+class OTPVerificationSerializer(serializers.Serializer):
+    request_id = serializers.IntegerField()
+    otp = serializers.CharField(min_length=6, max_length=6)
